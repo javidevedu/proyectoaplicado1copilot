@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { publicQuizClient } from '@/integrations/supabase/publicQuizClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, XCircle, PenLine, Mic, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, PenLine, Mic, Loader2, BookOpen, Headphones } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Question = Tables<'questions'>;
@@ -30,6 +30,36 @@ export default function QuizResults({ questions, answers, attemptId, scorableCor
 
   const writingQs = questions.filter(q => q.type === 'writing');
   const speakingQs = questions.filter(q => q.type === 'speaking');
+  const readingQs = questions.filter(q => q.type === 'multiple_choice');
+  const listeningQs = questions.filter(q => q.type === 'listening');
+  const fillBlankQs = questions.filter(q => q.type === 'fill_blank');
+
+  const getOptionText = (q: Question, letter: string) => {
+    if (!letter) return '';
+    const key = `option_${letter.toLowerCase()}` as keyof Question;
+    return (q[key] as string | null) || '';
+  };
+
+  const isAnswerCorrect = (q: Question, studentAnswer: string) => {
+    if (q.type === 'fill_blank') {
+      return studentAnswer.trim().toLowerCase() === (q.correct_answer || '').trim().toLowerCase();
+    }
+    return studentAnswer === q.correct_answer;
+  };
+
+  const getStudentDisplay = (q: Question, studentAnswer: string) => {
+    if (!studentAnswer) return 'No answer provided';
+    if (q.type === 'fill_blank') return studentAnswer;
+    const optionText = getOptionText(q, studentAnswer);
+    return optionText ? `${studentAnswer}) ${optionText}` : studentAnswer;
+  };
+
+  const getCorrectDisplay = (q: Question) => {
+    if (q.type === 'fill_blank') return q.correct_answer || 'No answer';
+    const correctLetter = q.correct_answer || '';
+    const optionText = getOptionText(q, correctLetter);
+    return optionText ? `${correctLetter}) ${optionText}` : correctLetter || 'No answer';
+  };
 
   // Poll for writing feedback
   useEffect(() => {
@@ -94,10 +124,46 @@ export default function QuizResults({ questions, answers, attemptId, scorableCor
             </div>
             <p className="text-muted-foreground">{percentage}% correct</p>
             <p className="text-xs text-muted-foreground italic">
-              Speaking is graded by your teacher. Detailed results for reading and listening will be shared by your teacher.
+              Review your reading, listening, and fill-in-the-blank answers below. Writing and speaking are reviewed separately by your teacher.
             </p>
           </CardContent>
         </Card>
+
+        {readingQs.length > 0 && (
+          <QuestionReviewSection
+            icon={<BookOpen className="w-4 h-4 text-primary" />}
+            title="Reading"
+            questions={readingQs}
+            answers={answers}
+            isCorrect={isAnswerCorrect}
+            getStudentText={getStudentDisplay}
+            getCorrectText={getCorrectDisplay}
+          />
+        )}
+
+        {fillBlankQs.length > 0 && (
+          <QuestionReviewSection
+            icon={<PenLine className="w-4 h-4 text-primary" />}
+            title="Fill in the Blank"
+            questions={fillBlankQs}
+            answers={answers}
+            isCorrect={isAnswerCorrect}
+            getStudentText={getStudentDisplay}
+            getCorrectText={getCorrectDisplay}
+          />
+        )}
+
+        {listeningQs.length > 0 && (
+          <QuestionReviewSection
+            icon={<Headphones className="w-4 h-4 text-primary" />}
+            title="Listening"
+            questions={listeningQs}
+            answers={answers}
+            isCorrect={isAnswerCorrect}
+            getStudentText={getStudentDisplay}
+            getCorrectText={getCorrectDisplay}
+          />
+        )}
 
         {/* Writing Section — only feedback, no correct answers */}
         {writingQs.length > 0 && (
@@ -199,5 +265,58 @@ export default function QuizResults({ questions, answers, attemptId, scorableCor
         )}
       </div>
     </div>
+  );
+}
+
+function QuestionReviewSection({
+  icon,
+  title,
+  questions,
+  answers,
+  isCorrect,
+  getStudentText,
+  getCorrectText,
+}: {
+  icon: ReactNode;
+  title: string;
+  questions: Question[];
+  answers: Record<string, string>;
+  isCorrect: (question: Question, studentAnswer: string) => boolean;
+  getStudentText: (question: Question, studentAnswer: string) => string;
+  getCorrectText: (question: Question) => string;
+}) {
+  const correctCount = questions.filter(q => isCorrect(q, answers[q.id] || '')).length;
+
+  return (
+    <Card>
+      <CardContent className="py-6 space-y-4">
+        <div className="flex items-center gap-2">
+          {icon}
+          <h3 className="text-lg font-heading font-bold">{title}</h3>
+          <Badge variant="outline" className="ml-auto text-xs">
+            {correctCount}/{questions.length}
+          </Badge>
+        </div>
+
+        <div className="space-y-3">
+          {questions.map(q => {
+            const studentAnswer = answers[q.id] || '';
+            const correct = isCorrect(q, studentAnswer);
+            return (
+              <div key={q.id} className={`rounded-lg border p-4 ${correct ? 'border-primary/30 bg-primary/5' : 'border-destructive/30 bg-destructive/5'}`}>
+                <div className="flex items-start gap-2">
+                  {correct ? <CheckCircle2 className="w-4 h-4 text-primary shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />}
+                  <div className="space-y-1 flex-1">
+                    <p className="text-sm font-medium">{q.question_text}</p>
+                    <p className="text-xs text-muted-foreground">Your answer: <span className="font-semibold text-foreground">{getStudentText(q, studentAnswer)}</span></p>
+                    <p className="text-xs text-primary">Correct answer: <span className="font-semibold">{getCorrectText(q)}</span></p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
