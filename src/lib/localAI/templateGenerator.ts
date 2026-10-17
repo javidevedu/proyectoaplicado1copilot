@@ -42,13 +42,37 @@ function grammarItems(topics: string[]): GeneratedQuestion[] {
 }
 
 export function writingPrompt(level: string, topics: string[], words: number, idx: number): GeneratedQuestion {
+  const topic = topics[idx % Math.max(1, topics.length)] || 'English';
+  return topicWritingQuestionBank(topic, level, words)[Math.floor(idx / Math.max(1, topics.length)) % 5];
+}
+
+const TOPIC_WRITING_TEMPLATES = [
+  (topic: string) => `Explain ${topic} in your own words and give three clear examples.`,
+  (topic: string) => `Describe how you use or encounter ${topic} in everyday life. Include specific details.`,
+  (topic: string) => `Compare two situations involving ${topic}. Explain what is similar and what is different.`,
+  (topic: string) => `Write a short story that demonstrates your understanding of ${topic}.`,
+  (topic: string) => `Give your opinion about the importance of ${topic} and support it with reasons and examples.`,
+] as const;
+
+/** Five reusable writing questions are available for every selected topic. */
+export function topicWritingQuestionBank(topic: string, level: string, words: number): GeneratedQuestion[] {
+  return TOPIC_WRITING_TEMPLATES.map((makePrompt) => {
+    const prompt = makePrompt(topic);
+    return {
+      type: 'writing',
+      question_text: `${prompt} Write about ${words} words at ${level} level. Check your spelling and grammar.`,
+      correct_answer: `Model answer: a well-organised text of about ${words} words that responds to the prompt and clearly demonstrates understanding of ${topic}.`,
+    };
+  });
+}
+
+function fallbackWritingPrompt(level: string, words: number, idx: number): GeneratedQuestion {
   const themes = ['your last holiday', 'your daily routine', 'your favourite place in your city', 'a person you admire', 'the role of technology in your life', 'your plans for the future'];
   const theme = themes[idx % themes.length];
-  const list = topics.slice(0, 4).join(', ');
   return {
     type: 'writing',
-    question_text: `Write a text of about ${words} words about ${theme}. You must use these topics/structures: ${list}. Write at ${level} level and check your spelling.`,
-    correct_answer: `Model answer: a well-organised text of about ${words} words about ${theme} that clearly uses ${list}.`,
+    question_text: `Write a text of about ${words} words about ${theme}. Write at ${level} level and check your spelling.`,
+    correct_answer: `Model answer: a well-organised text of about ${words} words about ${theme}.`,
   };
 }
 
@@ -67,7 +91,13 @@ export function generateFromBank(params: GenerateParams): GeneratedQuestion[] {
     out.push(...grammar.slice(0, nGrammar), ...mcFromPassages(params.mcer_level, dist.reading - nGrammar, false));
   }
   if (dist.listening) out.push(...mcFromPassages(params.mcer_level, dist.listening, true));
-  if (dist.writing) for (let i = 0; i < dist.writing; i++) out.push(writingPrompt(params.mcer_level, topics, params.writing_word_limit, i));
+  if (dist.writing) {
+    for (let i = 0; i < dist.writing; i++) {
+      out.push(topics.length
+        ? writingPrompt(params.mcer_level, topics, params.writing_word_limit, i)
+        : fallbackWritingPrompt(params.mcer_level, params.writing_word_limit, i));
+    }
+  }
   if (dist.speaking) {
     const sp = speakingPrompts(params.mcer_level, dist.speaking);
     while (sp.length < dist.speaking) sp.push(sp[sp.length % Math.max(1, sp.length)] ?? speakingPrompts(params.mcer_level, 1)[0]);

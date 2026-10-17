@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { distribute } from './types';
-import { generateFromBank, skillOf } from './templateGenerator';
+import { generateFromBank, skillOf, topicWritingQuestionBank } from './templateGenerator';
 import { computeScore } from './writingGrader';
 import { extractJsonArray } from './webllmGenerator';
+import { ENGLISH_TOPICS } from '@/constants/englishTopics';
 
 describe('local AI', () => {
   it('splits 14 questions across 4 skills as 4,4,3,3', () => {
@@ -33,6 +34,30 @@ describe('local AI', () => {
       expect(questions).toHaveLength(20);
       expect(questions.every((question) => skillOf(question.type) === skill)).toBe(true);
     }
+  });
+
+  it('provides five distinct bank questions for every selectable topic', () => {
+    for (const topic of ENGLISH_TOPICS) {
+      const questions = topicWritingQuestionBank(topic, 'B1', 100);
+
+      expect(questions).toHaveLength(5);
+      expect(new Set(questions.map((question) => question.question_text)).size).toBe(5);
+      expect(questions.every((question) => question.question_text.includes(topic))).toBe(true);
+    }
+  });
+
+  it('uses selected topics in generated writing questions', () => {
+    const questions = generateFromBank({
+      mcer_level: 'B1',
+      target_audience: 'university',
+      topics: 'Simple Past',
+      skills: ['writing'],
+      num_questions: 10,
+      writing_word_limit: 100,
+    });
+
+    expect(questions).toHaveLength(10);
+    expect(questions.every((question) => question.question_text.includes('Simple Past'))).toBe(true);
   });
 
   it('invalid AI output yields no questions (bank fallback)', () => {
