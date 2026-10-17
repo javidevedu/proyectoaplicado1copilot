@@ -4,6 +4,7 @@ import { generateFromBank, skillOf, topicWritingQuestionBank } from './templateG
 import { computeScore } from './writingGrader';
 import { extractJsonArray } from './webllmGenerator';
 import { ENGLISH_TOPICS } from '@/constants/englishTopics';
+import { TOPIC_LISTENING_ITEMS } from './questionBank';
 
 describe('local AI', () => {
   it('splits 14 questions across 4 skills as 4,4,3,3', () => {
@@ -43,6 +44,36 @@ describe('local AI', () => {
       expect(questions).toHaveLength(5);
       expect(new Set(questions.map((question) => question.question_text)).size).toBe(5);
       expect(questions.every((question) => question.question_text.includes(topic))).toBe(true);
+    }
+  });
+
+  it('provides two listening questions for every selectable topic', () => {
+    for (const topic of ENGLISH_TOPICS) {
+      const questions = TOPIC_LISTENING_ITEMS[topic];
+
+      expect(questions).toHaveLength(2);
+      expect(questions.every((question) => question.audio_script.includes(topic))).toBe(true);
+    }
+  });
+
+  it('uses both selected-topic listening questions before passage fallbacks', () => {
+    const topics = [ENGLISH_TOPICS[0], ENGLISH_TOPICS[45]];
+    const questions = generateFromBank({
+      mcer_level: 'B1',
+      target_audience: 'university',
+      topics: topics.join(', '),
+      skills: ['listening'],
+      num_questions: 10,
+      writing_word_limit: 100,
+    });
+    const topicQuestions = questions.filter((question) =>
+      topics.some((topic) => question.audio_script?.includes(topic))
+    );
+
+    expect(questions).toHaveLength(10);
+    expect(topicQuestions).toHaveLength(4);
+    for (const topic of topics) {
+      expect(topicQuestions.filter((question) => question.audio_script?.includes(topic))).toHaveLength(2);
     }
   });
 

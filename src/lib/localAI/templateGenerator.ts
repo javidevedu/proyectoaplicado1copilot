@@ -1,4 +1,4 @@
-import { PASSAGES, GRAMMAR_ITEMS, matchTopicKey } from './questionBank';
+import { PASSAGES, GRAMMAR_ITEMS, TOPIC_LISTENING_ITEMS, matchTopicKey } from './questionBank';
 import { bandFor, distribute, parseTopics, type GenerateParams, type GeneratedQuestion } from './types';
 
 function shuffle<T>(arr: T[]): T[] {
@@ -25,6 +25,32 @@ function mcFromPassages(level: string, n: number, listening: boolean): Generated
     if (pi > 50) break;
   }
   return items;
+}
+
+function listeningFromTopics(topics: string[], n: number, level: string): GeneratedQuestion[] {
+  const out: GeneratedQuestion[] = [];
+  const selectedTopics = shuffle(topics);
+
+  for (let questionIndex = 0; questionIndex < 2 && out.length < n; questionIndex++) {
+    for (const topic of selectedTopics) {
+      const item = TOPIC_LISTENING_ITEMS[topic]?.[questionIndex];
+      if (!item) continue;
+      out.push({
+        type: 'listening',
+        audio_script: item.audio_script,
+        question_text: item.q,
+        option_a: item.options[0],
+        option_b: item.options[1],
+        option_c: item.options[2],
+        option_d: item.options[3],
+        correct_answer: item.answer,
+      });
+      if (out.length >= n) break;
+    }
+  }
+
+  if (out.length < n) out.push(...mcFromPassages(level, n - out.length, true));
+  return out;
 }
 
 /** Grammar items for selected topics (used to enrich reading section). */
@@ -90,7 +116,11 @@ export function generateFromBank(params: GenerateParams): GeneratedQuestion[] {
     const nGrammar = Math.min(grammar.length, Math.floor(dist.reading / 2));
     out.push(...grammar.slice(0, nGrammar), ...mcFromPassages(params.mcer_level, dist.reading - nGrammar, false));
   }
-  if (dist.listening) out.push(...mcFromPassages(params.mcer_level, dist.listening, true));
+  if (dist.listening) {
+    out.push(...(topics.length
+      ? listeningFromTopics(topics, dist.listening, params.mcer_level)
+      : mcFromPassages(params.mcer_level, dist.listening, true)));
+  }
   if (dist.writing) {
     for (let i = 0; i < dist.writing; i++) {
       out.push(topics.length

@@ -1,4 +1,5 @@
 import type { Band } from './types';
+import { ENGLISH_TOPICS } from '@/constants/englishTopics';
 
 export interface MCItem { q: string; options: [string, string, string, string]; answer: 'A' | 'B' | 'C' | 'D' }
 export interface Passage { title: string; text: string; questions: MCItem[] }
@@ -171,6 +172,35 @@ export const GRAMMAR_ITEMS: Record<string, FillItem[]> = {
     { sentence: 'He has three cars. He ___ be rich. (must/can\'t)', answer: 'must' },
   ],
 };
+
+export interface TopicListeningItem extends MCItem { audio_script: string }
+
+/** Two listening questions for every topic available in the quiz form. */
+export const TOPIC_LISTENING_ITEMS: Record<string, [TopicListeningItem, TopicListeningItem]> = (() => {
+  const bank: Record<string, [TopicListeningItem, TopicListeningItem]> = {};
+
+  ENGLISH_TOPICS.forEach((topic, index) => {
+    const distractors = [1, 2, 3].map((offset) =>
+      ENGLISH_TOPICS[(index + offset) % ENGLISH_TOPICS.length]
+    );
+    bank[topic] = [
+      {
+        audio_script: `In today's English lesson, students are studying ${topic}. The teacher reads two examples aloud and asks the class to notice how ${topic} is used in context. Students compare the examples and explain which one fits the situation.`,
+        q: "What is today's lesson about?",
+        options: [topic, ...distractors] as [string, string, string, string],
+        answer: 'A',
+      },
+      {
+        audio_script: `For the final activity, each student writes one original sentence using ${topic}. They exchange sentences with a partner, check whether the example is clear, and suggest one correction if needed.`,
+        q: 'What do students exchange with a partner?',
+        options: ['Their original sentences', 'Their textbooks', 'Their homework schedule', 'Their exam results'],
+        answer: 'A',
+      },
+    ];
+  });
+
+  return bank;
+})();
 
 /** Keywords / patterns used to detect topic usage in writing. */
 export const TOPIC_PATTERNS: Record<string, RegExp> = {
