@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { distribute } from './types';
-import { generateFromBank } from './templateGenerator';
+import { generateFromBank, skillOf } from './templateGenerator';
 import { computeScore } from './writingGrader';
 import { extractJsonArray } from './webllmGenerator';
 
@@ -17,6 +17,22 @@ describe('local AI', () => {
   it('bank generates the exact requested number of questions', () => {
     const qs = generateFromBank({ mcer_level: 'B1', target_audience: 'university', topics: 'Simple Past, Passive Voice', skills: ['reading', 'writing', 'listening', 'speaking'], num_questions: 14, writing_word_limit: 100 });
     expect(qs).toHaveLength(14);
+  });
+
+  it('bank fills the requested count for each skill without loading a model', () => {
+    for (const skill of ['reading', 'writing', 'listening', 'speaking']) {
+      const questions = generateFromBank({
+        mcer_level: 'A2',
+        target_audience: 'high_school',
+        topics: 'Simple Past, Passive Voice',
+        skills: [skill],
+        num_questions: 20,
+        writing_word_limit: 100,
+      });
+
+      expect(questions).toHaveLength(20);
+      expect(questions.every((question) => skillOf(question.type) === skill)).toBe(true);
+    }
   });
 
   it('invalid AI output yields no questions (bank fallback)', () => {

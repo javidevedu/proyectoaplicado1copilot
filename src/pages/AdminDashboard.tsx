@@ -61,7 +61,7 @@ export default function AdminDashboard() {
 
   const generateQuestions = async (quiz: Quiz) => {
     setGeneratingId(quiz.id);
-    const toastId = toast.loading('Generando preguntas...');
+    const toastId = toast.loading('Generando preguntas desde el banco local...');
     try {
       const params = {
         target_audience: quiz.target_audience,
@@ -71,30 +71,19 @@ export default function AdminDashboard() {
         num_questions: (quiz as any).num_questions || 14,
         writing_word_limit: (quiz as any).writing_word_limit || 100,
       };
-      const { hasWebGPU } = await import('@/lib/localAI/webllmEngine');
       const { generateFromBank } = await import('@/lib/localAI/templateGenerator');
-      let useAI = hasWebGPU();
-      let generated;
-      if (useAI) {
-        try {
-          const { generateWithLocalAI } = await import('@/lib/localAI/webllmGenerator');
-          generated = await generateWithLocalAI(
-            params,
-            (r) => toast.loading(`Cargando IA local: ${Math.round(r.progress * 100)}%`, { id: toastId }),
-            (s) => toast.loading(s, { id: toastId }),
-          );
-        } catch (err) {
-          console.error('Local AI failed, using question bank', err);
-          useAI = false;
-        }
+      const generated = generateFromBank(params);
+      if (generated.length !== params.num_questions) {
+        throw new Error(`El banco generó ${generated.length} de ${params.num_questions} preguntas.`);
       }
-      if (!generated) generated = generateFromBank(params);
-      await supabase.from('questions').delete().eq('quiz_id', quiz.id);
+
+      const { error: deleteError } = await supabase.from('questions').delete().eq('quiz_id', quiz.id);
+      if (deleteError) throw deleteError;
       const { error } = await supabase.from('questions').insert(
         generated.map((q, i) => ({ ...q, quiz_id: quiz.id, sort_order: i })) as any
       );
       if (error) throw error;
-      toast.success(`${generated.length} preguntas generadas ${useAI ? 'con IA local' : 'desde el banco'}`, { id: toastId });
+      toast.success(`${generated.length} preguntas generadas desde el banco local`, { id: toastId });
       fetchQuizzes();
     } catch (e: any) {
       toast.error(`Error al generar preguntas${e?.message ? ': ' + e.message : ''}`, { id: toastId });
@@ -174,7 +163,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={() => generateQuestions(quiz)} disabled={generatingId !== null}>
                     {generatingId === quiz.id ? <Loader2 className="animate-spin w-4 h-4 mr-1" /> : <Sparkles className="w-4 h-4 mr-1" />}
-                    Generar con IA
+                    Generar preguntas
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => navigate(`/admin/quiz/${quiz.id}`)}>
                     <Eye className="w-4 h-4 mr-1" /> Ver cuestionario
